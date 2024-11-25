@@ -1,9 +1,9 @@
 ## Dependencies
 
-* Python 3.11
+* Python 3.10
 * PyTorch 2.1.2
 * cuda 12.1
-* torchvision 0.8.0
+* torchvision 0.16.2
 
 ```bash
 > conda env create -f env_ts.yaml
