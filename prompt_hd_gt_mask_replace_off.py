@@ -5,6 +5,7 @@ from layers.Sub_CA import SCA
 import re
 from typing import Optional, Tuple, Union
 from dataclasses import dataclass
+import numpy as np
 
 @dataclass
 class BaseModelOutputWithPastAndCrossAttentions:
@@ -13,7 +14,6 @@ class BaseModelOutputWithPastAndCrossAttentions:
     hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None
     attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
     cross_attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
-
 
 class MSK(nn.Module):
     def __init__(self, device="cuda:0", l_layer=6):
@@ -26,7 +26,6 @@ class MSK(nn.Module):
         for param in self.gpt2.h.parameters():
             param.requires_grad = False
 
-    # Define a custom forward function where the attention_mask.view() step is skipped
     def custom_forward(self,
                     input_ids: Optional[torch.LongTensor] = None,
                     past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
@@ -41,7 +40,7 @@ class MSK(nn.Module):
                     output_attentions: Optional[bool] = None,
                     output_hidden_states: Optional[bool] = None,
                     return_dict: Optional[bool] = None,
-                    adjacency_matrix: Optional[torch.FloatTensor] = None, 
+                    calibrated_mask: Optional[torch.FloatTensor] = None, 
                     ) -> Union[Tuple, dict]:
 
         output_attentions = output_attentions if output_attentions is not None else self.gpt2.config.output_attentions
@@ -69,11 +68,8 @@ class MSK(nn.Module):
             position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=device)
             position_ids = position_ids.unsqueeze(0)
 
-        # if inputs_embeds is None:
         inputs_embeds = self.gpt2.wte(inputs_embeds)
         position_embeds = self.gpt2.wpe(position_ids)
-        # print("Shape of inputs_embeds:",inputs_embeds.shape)
-        # print("Shape of position_embeds:",position_embeds.shape)
 
         hidden_states = inputs_embeds + position_embeds
 
@@ -82,9 +78,7 @@ class MSK(nn.Module):
         presents = () if use_cache else None
 
         for i, (block, layer_past) in enumerate(zip(self.gpt2.h, past_key_values)):
-            # print(attention_mask)
-            # print(adjacency_matrix)
-            attention_mask = attention_mask * adjacency_matrix
+            attention_mask = attention_mask + calibrated_mask
             
             outputs = block(
                 hidden_states,
@@ -118,12 +112,25 @@ class MSK(nn.Module):
             attentions=all_self_attentions
         )
 
-    def forward(self, x, attention_mask, adjacency_matrix):
-        adjacency_matrix = adjacency_matrix.to(self.device).float()
+    def forward(self, x, attention_mask, calibrated_mask):
+        calibrated_mask = calibrated_mask.to(self.device).float()
+        attention_mask = attention_mask.to(self.device).float()
+
+        calibrated_mask = calibrated_mask.unsqueeze(0)
+        num_heads =  self.gpt2.config.n_head
+        calibrated_mask = calibrated_mask.unsqueeze(1).repeat(1, num_heads, 1, 1)
+
+        attention_mask = attention_mask.to(self.device).float()
+        attention_mask = attention_mask.unsqueeze(0)
+        attention_mask = attention_mask.unsqueeze(1).repeat(1, num_heads, 1, 1)
+        # print(x.shape)
+        # print(attention_mask.shape)
+        # print(calibrated_mask.shape)
+
         output = self.custom_forward(
             inputs_embeds=x,
             attention_mask=attention_mask,
-            adjacency_matrix=adjacency_matrix
+            calibrated_mask=calibrated_mask
         ).last_hidden_state
 
         return output
@@ -136,21 +143,20 @@ class GenPromptEmb(nn.Module):
         num_nodes=7,
         device='cuda:6',
         input_len=96,
+        output_len=96,
         d_model=768,
-        l_layer=6,
-        e_layer=6,
-        output_len=96
+        l_layer=6
     ):  
         super(GenPromptEmb, self).__init__()
         self.data_path = data_path
-        self.device = device
-        self.input_len = input_len
         self.model_name = model_name
         self.num_nodes = num_nodes
+        self.device = device
+        self.input_len = input_len
+        self.output_len = output_len
         self.d_model = d_model
         self.l_layer = l_layer
-        self.e_layer = e_layer
-        self.output_len = output_len
+        
         self.len = self.input_len - 1
         self.out_len = self.output_len -1
 
@@ -167,32 +173,28 @@ class GenPromptEmb(nn.Module):
 
     def _generate_prompt(self, template_type):
         templates = {
-            'HD_GT': {
-                'FRED': "From <t1> to <t2>, the values were <value1, ..., valuen> every month. The values of next <output_len> months are <gt1, ..., gtn>",
-                'ILI': "From <t1> to <t2>, the values were <value1, ..., valuen> every week. The values of next <output_len> weeks are <gt1, ..., gtn>",
-                'ETTh1': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. The values of next <output_len> hours are <gt1, ..., gtn>",
-                'ETTh2': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. The values of next <output_len> hours are <gt1, ..., gtn>",
-                'ECL': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. The values next <output_len> hours are <gt1, ..., gtn>",
-                'ETTm1': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. The values of next <output_len> minutes are <gt1, ..., gtn>",
-                'ETTm2': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. The values of next <output_len> minutes are <gt1, ..., gtn>",
-                'Weather': "From <t1> to <t2>, the values were <value1, ..., valuen> every 10 minutes. The values of next <output_len> minutes are <gt1, ..., gtn>"
+            'GT_HD': {
+                'ETTh1': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. The values for the next <output_len> hours are <gt1, ..., gtn>",
+                'ETTh2': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. The values for the next <output_len> hours are <gt1, ..., gtn>",
+                'Exchange': "From <t1> to <t2>, the exchange rates were <value1, ..., valuen> every day. The rates for the next <output_len> days are <gt1, ..., gtn>",
+                'ETTm1': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. The values for the next <output_len> minutes are <gt1, ..., gtn>",
+                'ETTm2': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. The values for the next <output_len> minutes are <gt1, ..., gtn>",
+                'Weather': "From <t1> to <t2>, the values were <value1, ..., valuen> every 10 minutes. The values for the next <output_len> minutes are <gt1, ..., gtn>"
             },
             'HD': {
-                'FRED': "From <t1> to <t2>, the values were <value1, ..., valuen> every month. Forecast the values of next <output_len> months",
-                'ILI': "From <t1> to <t2>, the values were <value1, ..., valuen> every week. Forecast the values of next <output_len> weeks",
-                'ETTh1': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. Forecast the values of next <output_len> hours",
-                'ETTh2': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. Forecast the values of next <output_len> hours",
-                'ECL': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. Forecast the values of next <output_len> hours",
-                'ETTm1': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. Forecast the values of next <output_len> minutes",
-                'ETTm2': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. Forecast the values of next <output_len> minutes",
-                'Weather': "From <t1> to <t2>, the values were <value1, ..., valuen> every 10 minutes. Forecast the values of next <output_len> minutes"
+                'ETTh1': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. Forecast the values for the next <output_len> hours",
+                'ETTh2': "From <t1> to <t2>, the values were <value1, ..., valuen> every hour. Forecast the values for the next <output_len> hours",
+                'Exchange': "From <t1> to <t2>, the exchange rates were <value1, ..., valuen> every day. Forecast the rates for the next <output_len> days",
+                'ETTm1': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. Forecast the values for the next <output_len> minutes",
+                'ETTm2': "From <t1> to <t2>, the values were <value1, ..., valuen> every 15 minutes. Forecast the values for the next <output_len> minutes",
+                'Weather': "From <t1> to <t2>, the values were <value1, ..., valuen> every 10 minutes. Forecast the values for the next <output_len> minutes"
             }
         }
-        return templates[template_type].get(self.data_path, templates[template_type]['FRED'])
+        return templates[template_type].get(self.data_path, templates[template_type]['ETTh1'])
     
 
     def _generate_mask(self, token_types, max_length):
-        mask = torch.ones((max_length, max_length), device=self.device)
+        mask = torch.zeros((max_length, max_length), device=self.device)
 
         language_indices = [i for i, t in enumerate(token_types) if t == "language"]
         time_series_indices = [i for i, t in enumerate(token_types) if t == "time_series"]
@@ -205,116 +207,121 @@ class GenPromptEmb(nn.Module):
                 mask[i, j] = -100  
                 mask[j, i] = -100  
 
-        # for i in language_indices:
-        #     for j in language_indices:
-        #         if i != j:
-        #             mask[i, j] = 0.5
         return mask
 
-    def _prepare_prompt(self, HD_GT, HD, x, y, x_mark, y_mark, i, j):
+    def _prepare_prompt(self, GT_HD, HD, x, y, x_mark, y_mark, i, j):
         values = x[i, :, j].flatten().tolist()
         values_str = ", ".join([str(int(value)) for value in values])
 
         gt_values = y[i, :, j].flatten().tolist()
         gt_str = ", ".join([str(int(value)) for value in gt_values])
-
-        # Prepare the prompts by replacing values
-        HD_GT_prompt = HD_GT.replace("value1, ..., valuen", values_str)
+    
+        GT_HD_prompt = GT_HD.replace("value1, ..., valuen", values_str)
         HD_prompt = HD.replace("value1, ..., valuen", values_str)
         HD_prompt = HD_prompt.replace("output_len", str(self.output_len))
-        HD_GT_prompt = HD_GT_prompt.replace("gt1, ..., gtn", gt_str)
-        HD_GT_prompt = HD_GT_prompt.replace("output_len", str(self.output_len))
+        GT_HD_prompt = GT_HD_prompt.replace("gt1, ..., gtn", gt_str)
+        GT_HD_prompt = GT_HD_prompt.replace("output_len", str(self.output_len))
 
-        if self.data_path in ['FRED', 'ILI']:
-            hd_start_date = f"{int(x_mark[i, 0, 2]):02d}/{int(x_mark[i, 0, 1]):02d}/{int(x_mark[i, 0, 0]):04d}"
-            hd_end_date = f"{int(x_mark[i, self.len, 2]):02d}/{int(x_mark[i, self.len, 1]):02d}/{int(x_mark[i, self.len, 0]):04d}"
-
-        elif self.data_path in ['ETTh1', 'ETTh2', 'ECL']:
+        if self.data_path in ['ETTh1', 'ETTh2', 'ECL']:
             hd_start_date = f"{int(x_mark[i, 0, 2]):02d}/{int(x_mark[i, 0, 1]):02d}/{int(x_mark[i, 0, 0]):04d} {int(x_mark[i, 0, 4]):02d}:00"
             hd_end_date = f"{int(x_mark[i, self.len, 2]):02d}/{int(x_mark[i, self.len, 1]):02d}/{int(x_mark[i, self.len, 0]):04d} {int(x_mark[i, self.len, 4]):02d}:00"
 
-        else: # ETTm1, ETTm2, Weather
+        else:
             hd_start_date = f"{int(x_mark[i, 0, 2]):02d}/{int(x_mark[i, 0, 1]):02d}/{int(x_mark[i, 0, 0]):04d} {int(x_mark[i, 0, 4]):02d}:{int(x_mark[i, 0, 5]):02d}"
             hd_end_date = f"{int(x_mark[i, self.len, 2]):02d}/{int(x_mark[i, self.len, 1]):02d}/{int(x_mark[i, self.len, 0]):04d} {int(x_mark[i, self.len, 4]):02d}:{int(x_mark[i, self.len, 5]):02d}"
 
-        HD_GT_prompt = HD_GT_prompt.replace("t1", hd_start_date).replace("t2", hd_end_date)
+        GT_HD_prompt = GT_HD_prompt.replace("t1", hd_start_date).replace("t2", hd_end_date)
         HD_prompt = HD_prompt.replace("t1", hd_start_date).replace("t2", hd_end_date)
-        # print(HD_GT_prompt)
+        # print(GT_HD_prompt)
 
-        # Encode the prompts
-        HD_GT_token = self.tokenizer.encode(HD_GT_prompt, return_tensors="pt").to(self.device)
+        GT_HD_token = self.tokenizer.encode(GT_HD_prompt, return_tensors="pt").to(self.device)
         HD_token = self.tokenizer.encode(HD_prompt, return_tensors="pt").to(self.device)
         
-        token_texts = self.tokenizer.convert_ids_to_tokens(HD_GT_token.squeeze(0))
-        token_types = ["time_series" if re.search(r"<.*?>", token) else "language" for token in token_texts]
+        gt_token_texts = self.tokenizer.convert_ids_to_tokens(GT_HD_token.squeeze(0))
+        capturing = False
+        gt_token_types = []
+        hd_token_types = []
 
-        return HD_GT_token, HD_token, token_types
+        for token in gt_token_texts:
+            if token == 'Ġ<':
+                capturing = True
+                gt_token_types.append("time_series")
+            elif token == '>':
+                capturing = False
+                gt_token_types.append("time_series")
+            elif capturing:
+                gt_token_types.append("time_series")
+            else:
+                gt_token_types.append("language")
+
+        hd_token_texts = self.tokenizer.convert_ids_to_tokens(HD_token.squeeze(0))
+        for token in hd_token_texts:
+            if token == 'Ġ<':
+                capturing = True
+                hd_token_types.append("time_series")
+            elif token == '>':
+                capturing = False
+                hd_token_types.append("time_series")
+            elif capturing:
+                hd_token_types.append("time_series")
+            else:
+                hd_token_types.append("language")
+
+        return GT_HD_token, HD_token, gt_token_types, hd_token_types
 
 
-    def forward(self, HD_GT_token, HD_token, token_types):
-        HD_GT_token = HD_GT_token.to(self.device)
+    def forward(self, GT_HD_token, HD_token, gt_token_types, hd_token_types):
+        GT_HD_token = GT_HD_token.to(self.device)
         HD_token = HD_token.to(self.device)
-        # print("Shape of HD_GT_token:",HD_GT_token.shape)
-        seq_len_GT = HD_GT_token.size(0)
+
+        seq_len_GT = GT_HD_token.size(0)
         seq_len_HD = HD_token.size(0)
 
         causal_mask_GT = torch.tril(torch.ones((seq_len_GT, seq_len_GT), device=self.device))
         causal_mask_HD = torch.tril(torch.ones((seq_len_HD, seq_len_HD), device=self.device))
 
-        mask_adj_GT = self._generate_mask(token_types, seq_len_GT)
-        mask_adj_HD = self._generate_mask(token_types, seq_len_HD)
+        mask_GT = self._generate_mask(gt_token_types, seq_len_GT)
+        mask_HD = self._generate_mask(hd_token_types, seq_len_HD)
 
-        # print("mask_adj_GT:", mask_adj_GT)
-        # print("mask_adj_HD:", mask_adj_HD)
-        # combined_attention_mask_GT = (causal_mask_GT * mask_adj_GT).sum(dim=0).unsqueeze(0)
-        # combined_attention_mask_HD = (causal_mask_HD * mask_adj_HD).sum(dim=0).unsqueeze(0)
+        GT_HD_emb = self.gpt2(GT_HD_token, attention_mask=causal_mask_GT, calibrated_mask=mask_GT)
+        HD_emb = self.gpt2(HD_token, attention_mask=causal_mask_HD, calibrated_mask=mask_HD)
 
-        HD_GT_emb = self.gpt2(HD_GT_token, attention_mask=causal_mask_GT, adjacency_matrix=mask_adj_GT)
-        HD_emb = self.gpt2(HD_token, attention_mask=causal_mask_HD, adjacency_matrix=mask_adj_HD)
+        return GT_HD_emb, HD_emb
 
-        return HD_GT_emb, HD_emb
 
     def generate_embeddings(self, x, y, x_mark, y_mark):
-        HD_GT = self._generate_prompt('HD_GT')
+        GT_HD = self._generate_prompt('GT_HD')
         HD = self._generate_prompt('HD')
 
         max_gt_token, max_hd_token = 0, 0
-        HD_GT_emb_list, HD_emb_list = [], []
+        GT_HD_emb_list, HD_emb_list = [], []
 
         for i in range(len(x)):
             for j in range(x.shape[2]):
-                HD_GT_token, HD_token, token_types = self._prepare_prompt(HD_GT, HD, x, y, x_mark, y_mark, i, j)
+                GT_HD_token, HD_token, gt_token_types, hd_token_types = self._prepare_prompt(GT_HD, HD, x, y, x_mark, y_mark, i, j)
 
-                # Track the maximum token length
-                max_gt_token = max(max_gt_token, HD_GT_token.shape[1])
+                max_gt_token = max(max_gt_token, GT_HD_token.shape[1])
                 max_hd_token = max(max_hd_token, HD_token.shape[1])
 
-                # Store the tokens for further processing
-                HD_GT_emb_list.append((i, HD_GT_token, j))
+                GT_HD_emb_list.append((i, GT_HD_token, j))
                 HD_emb_list.append((i, HD_token, j))
 
-        # Prepare tensors for storing prompt embeddings
         prompt_emb_GT = torch.zeros((len(x), max_gt_token, self.d_model, x.shape[2]), dtype=torch.float32, device=self.device)
         prompt_emb_HD = torch.zeros((len(x), max_hd_token, self.d_model, x.shape[2]), dtype=torch.float32, device=self.device)
 
-        for (i, HD_GT_token, j), (_, HD_token, _) in zip(HD_GT_emb_list, HD_emb_list):
-            # Get embeddings from forward pass
-            HD_GT_emb, HD_emb = self.forward(HD_GT_token.squeeze(0), HD_token.squeeze(0), token_types)
-            HD_GT_emb = HD_GT_emb.unsqueeze(0)
+        for (i, GT_HD_token, j), (_, HD_token, _) in zip(GT_HD_emb_list, HD_emb_list):
+            GT_HD_emb, HD_emb = self.forward(GT_HD_token.squeeze(0), HD_token.squeeze(0), gt_token_types, hd_token_types)
+            GT_HD_emb = GT_HD_emb.unsqueeze(0)
             HD_emb = HD_emb.unsqueeze(0)
-            # print("Shape of HD_GT_emb: ",HD_GT_emb.shape)
-            # print("Shape of HD_emb: ",HD_emb.shape)
 
-            # Padding for HD_GT_emb
-            padding_length_GT = max_gt_token - HD_GT_emb.shape[1]
+            padding_length_GT = max_gt_token - GT_HD_emb.shape[1]
             if padding_length_GT > 0:
-                last_token_embedding_GT = HD_GT_emb[:, -1, :].unsqueeze(1)
+                last_token_embedding_GT = GT_HD_emb[:, -1, :].unsqueeze(1)
                 padding_GT = last_token_embedding_GT.repeat(1, padding_length_GT, 1)
-                HD_GT_emb_padded = torch.cat([HD_GT_emb, padding_GT], dim=1)
+                GT_HD_emb_padded = torch.cat([GT_HD_emb, padding_GT], dim=1)
             else:
-                HD_GT_emb_padded = HD_GT_emb
+                GT_HD_emb_padded = GT_HD_emb
 
-            # Padding for HD_emb
             padding_length_HD = max_hd_token - HD_emb.shape[1]
             if padding_length_HD > 0:
                 last_token_embedding_HD = HD_emb[:, -1, :].unsqueeze(1)
@@ -323,8 +330,7 @@ class GenPromptEmb(nn.Module):
             else:
                 HD_emb_padded = HD_emb
 
-            # Store the padded embeddings
-            prompt_emb_GT[i, :max_gt_token, :, j] = HD_GT_emb_padded.unsqueeze(0)
+            prompt_emb_GT[i, :max_gt_token, :, j] = GT_HD_emb_padded.unsqueeze(0)
             prompt_emb_HD[i, :max_hd_token, :, j] = HD_emb_padded.unsqueeze(0)
 
         prompt_emb_GT_1 = prompt_emb_GT[:, -1, :, :]
@@ -332,5 +338,4 @@ class GenPromptEmb(nn.Module):
 
         sub_out = self.sub_ac(prompt_emb_GT_1, prompt_emb_HD_1, prompt_emb_HD_1)
         sub_out = sub_out.permute(0, 2, 1).squeeze()
-        # print("Shape of sub_out: ",sub_out.shape)
         return sub_out
