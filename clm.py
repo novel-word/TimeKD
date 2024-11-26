@@ -77,8 +77,6 @@ class MSK(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         presents = () if use_cache else None
 
-        # print(attention_mask)
-        # print(calibrated_mask)
         for i, (block, layer_past) in enumerate(zip(self.gpt2.h, past_key_values)):
             attention_mask =  calibrated_mask
             
@@ -116,16 +114,9 @@ class MSK(nn.Module):
 
     def forward(self, x, calibrated_mask):
         calibrated_mask = calibrated_mask.to(self.device).float()
-        # attention_mask = attention_mask.to(self.device).float()
-
         calibrated_mask = calibrated_mask.unsqueeze(0)
         num_heads =  self.gpt2.config.n_head
         calibrated_mask = calibrated_mask.unsqueeze(1).repeat(1, num_heads, 1, 1)
-
-        # attention_mask = attention_mask.to(self.device).float()
-        # attention_mask = attention_mask.unsqueeze(0)
-        # attention_mask = attention_mask.unsqueeze(1).repeat(1, num_heads, 1, 1)
-        # print(x.shape)
 
         output = self.custom_forward(
             inputs_embeds=x,
