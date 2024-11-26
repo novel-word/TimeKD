@@ -11,7 +11,7 @@ import h5py
 warnings.filterwarnings('ignore')
 
 class Dataset_ETT_hour(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None, 
+    def __init__(self, root_path="/data", flag='train', size=None, 
                  features='M', data_path='ETTh1',
                  target='OT', scale=False, inverse=False, timeenc=0, freq='h'):
 
@@ -103,7 +103,7 @@ class Dataset_ETT_hour(Dataset):
         return self.scaler.inverse_transform(data)
 
 class Dataset_ETT_minute(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None, 
+    def __init__(self, root_path="/data", flag='train', size=None, 
                  features='M', data_path='ETTm1', 
                  target='OT', scale=False, inverse=False, timeenc=0, freq='t', cols=None):
 
@@ -204,7 +204,7 @@ class Dataset_ETT_minute(Dataset):
         return self.scaler.inverse_transform(data)
 
 class Dataset_Custom(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None,
+    def __init__(self, root_path="/data", flag='train', size=None,
                  features='M', data_path='ECL',
                  target='OT', scale=False, timeenc=0, freq='h',patch_len=16,percent=100):
         # size [seq_len, label_len, pred_len]
@@ -308,81 +308,6 @@ class Dataset_Custom(Dataset):
         seq_y_mark = self.data_stamp[r_begin:r_end]
 
         auto_y = self.data_x[s_begin+self.patch_len:s_end+self.patch_len]
-        return seq_x, seq_y, seq_x_mark, seq_y_mark
-
-    def __len__(self):
-        return len(self.data_x) - self.seq_len - self.pred_len + 1
-
-    def inverse_transform(self, data):
-        return self.scaler.inverse_transform(data)
-
-
-class Dataset_PEMS(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None,
-                 features='M', data_path='PEMS08',
-                 target='OT', scale=False, timeenc=0, freq='h'):
-        # size [seq_len, label_len, pred_len]
-        # info
-        self.seq_len = size[0]
-        self.label_len = size[1]
-        self.pred_len = size[2]
-        # init
-        assert flag in ['train', 'test', 'val']
-        type_map = {'train': 0, 'val': 1, 'test': 2}
-        self.set_type = type_map[flag]
-
-        self.features = features
-        self.target = target
-        self.scale = scale
-        self.timeenc = timeenc
-        self.freq = freq
-
-        self.root_path = root_path
-        self.data_path = data_path
-
-        if not data_path.endswith('.npz'):
-            data_path_file = data_path
-            data_path += '.npz' 
-        self.data_path = os.path.join(root_path, data_path)
-        self.data_path_file = data_path_file
-
-        self.__read_data__()
-
-    def __read_data__(self):
-        self.scaler = StandardScaler()
-        data_file = os.path.join(self.root_path, self.data_path)
-        data = np.load(data_file, allow_pickle=True)
-        data = data['data'][:, :, 0]
-
-        train_ratio = 0.6
-        valid_ratio = 0.2
-        train_data = data[:int(train_ratio * len(data))]
-        valid_data = data[int(train_ratio * len(data)): int((train_ratio + valid_ratio) * len(data))]
-        test_data = data[int((train_ratio + valid_ratio) * len(data)):]
-        total_data = [train_data, valid_data, test_data]
-        data = total_data[self.set_type]
-
-        if self.scale:
-            self.scaler.fit(train_data)
-            data = self.scaler.transform(data)
-
-        df = pd.DataFrame(data)
-        df = df.fillna(method='ffill', limit=len(df)).fillna(method='bfill', limit=len(df)).values
-
-        self.data_x = df
-        self.data_y = df
-
-    def __getitem__(self, index):
-        s_begin = index
-        s_end = s_begin + self.seq_len
-        r_begin = s_end
-        r_end = r_begin + self.pred_len
-
-        seq_x = self.data_x[s_begin:s_end]
-        seq_y = self.data_y[r_begin:r_end]
-        seq_x_mark = torch.zeros((seq_x.shape[0], 1))
-        seq_y_mark = torch.zeros((seq_x.shape[0], 1))
-
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):

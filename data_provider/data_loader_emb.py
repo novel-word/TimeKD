@@ -12,7 +12,7 @@ import h5py
 warnings.filterwarnings('ignore')
 
 class Dataset_ETT_hour(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None, 
+    def __init__(self, root_path="/data", flag='train', size=None, 
                  features='M', data_path='ETTh1', num_nodes=7,
                  target='OT', scale=True, inverse=False, timeenc=0, freq='h',
                  model_name="gpt2"):
@@ -52,9 +52,7 @@ class Dataset_ETT_hour(Dataset):
         self.data_path_file = data_path_file
 
         self.model_name = model_name
-        # self.embed_path = f"/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/TimeCMA/TimeKD/Embeddings/HD_GT/mask/{data_path_file}/{flag}/"
-        self.embed_path = f"/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/TimeCMA/TimeKD/Embeddings/HD_GT/ll12/{data_path_file}/{self.pred_len}/{flag}/"
-
+        self.embed_path = f"{data_path_file}/{self.pred_len}/{flag}/"
 
         self.__read_data__()
 
@@ -134,7 +132,7 @@ class Dataset_ETT_hour(Dataset):
         return self.scaler.inverse_transform(data)
    
 class Dataset_ETT_minute(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None, 
+    def __init__(self, root_path="/data", flag='train', size=None, 
                  features='M', data_path='ETTm1', model_name="gpt2",
                  target='OT', scale=True, inverse=False, timeenc=0, freq='t', cols=None):
         # size [seq_len, label_len, pred_len]
@@ -170,7 +168,7 @@ class Dataset_ETT_minute(Dataset):
         self.data_path_file = data_path_file
 
         self.model_name = model_name
-        self.embed_path = f"/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/TimeCMA/TimeKD/Embeddings/HD_GT/ll12/{data_path_file}/{self.pred_len}/{flag}/"
+        self.embed_path = f"{data_path_file}/{self.pred_len}/{flag}/"
 
         self.__read_data__()
 
@@ -250,7 +248,7 @@ class Dataset_ETT_minute(Dataset):
         return self.scaler.inverse_transform(data)
 
 class Dataset_Custom(Dataset):
-    def __init__(self, root_path="/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/data", flag='train', size=None,
+    def __init__(self, root_path="/data", flag='train', size=None,
                  features='M', data_path='ECL',
                  target='OT', scale=True, timeenc=0, freq='h',
                  percent=100,model_name="gpt2"):
@@ -287,7 +285,7 @@ class Dataset_Custom(Dataset):
         self.data_path_file = data_path_file
 
         self.model_name = model_name
-        self.embed_path = f"/data/cxliu/code/NeurIPS2023-One-Fits-All/Long-term_Forecasting/ST_LLM/TimeCMA/TimeKD/Embeddings/HD_GT/ll12/{data_path_file}/{self.pred_len}/{flag}/"
+        self.embed_path = f"{data_path_file}/{self.pred_len}/{flag}/"
 
         self.__read_data__()
 
