@@ -4,8 +4,8 @@ import time
 import h5py
 import argparse
 from torch.utils.data import DataLoader
-from data_provider.data_loader_save import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom,
-from prompt_emb import GenPromptEmb
+from data_provider.data_loader_save import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom
+from clm import GenPromptEmb
 
 def parse_args():
     parser = argparse.ArgumentParser()
