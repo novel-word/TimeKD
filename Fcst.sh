@@ -21,7 +21,7 @@ for seq_len in "${seq_lens[@]}"; do
         for dropout_n in "${dropout_ns[@]}"; do
           for e_layer in "${e_layers[@]}"; do
             for batch_size in "${batch_sizes[@]}"; do
-              log_path="./Results/Fcst/${data_path}/HD_GT/ll12/"
+              log_path="./Results/Fcst/${data_path}/"
               mkdir -p $log_path
               log_file="${log_path}i${seq_len}_o${pred_len}_lr${learning_rate}_c${channel}_el${e_layer}_dn${dropout_n}_bs${batch_size}_e${epochs}.log"
               nohup python train.py \
