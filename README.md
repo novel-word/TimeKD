@@ -1,3 +1,13 @@
+> If you find our work useful in your research. Please consider giving a star ⭐ and citation 📚:
+
+```bibtex
+@inproceedings{liu2025timekd,
+  title={Efficient Multivariate Time Series Forecasting via Calibrated Language Models with Privileged Knowledge Distillation},
+  author={Chenxi Liu and Hao Miao and Qianxiong Xu and Shaowen Zhou and Cheng Long and Yan Zhao and Ziyue Li and Rui Zhao},
+  booktitle    = {ICDE},
+  year={2025}
+```
+
 ## Dependencies
 
 * Python 3.10
