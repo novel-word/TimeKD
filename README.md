@@ -4,6 +4,8 @@
   <h2><b> (ICDE'25) Efficient Multivariate Time Series Forecasting via Calibrated Language Models with Privileged Knowledge Distillation </b></h2>
 </div>
 
+[![](http://img.shields.io/badge/cs.LG-arXiv%3A2505.02138-B31B1B.svg)](https://arxiv.org/abs/2505.02138)
+
 > If you find our work useful in your research. Please consider giving a star ⭐ and citation 📚:
 
 ```bibtex
