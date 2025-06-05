@@ -2,7 +2,7 @@
   <h2><b> (ICDE'25) Efficient Multivariate Time Series Forecasting via Calibrated Language Models with Privileged Knowledge Distillation </b></h2>
 </div>
 
-This repository contains the code for our ICDE 2025 [paper](https://www.arxiv.org/abs/2505.02138), where we an efficient MTSF framework that leverages the calibrated language models and privileged knowledge distillation.
+This repository contains the code for our ICDE 2025 [paper](https://www.arxiv.org/abs/2505.02138), where we propose an efficient MTSF framework that leverages the calibrated language models and privileged knowledge distillation.
 
 <p align="center">
   <img width="900" alt="image" src="https://github.com/user-attachments/assets/c3ffa90c-604a-4ebf-bb90-cca573264c91" />
