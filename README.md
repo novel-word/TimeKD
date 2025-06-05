@@ -1,6 +1,4 @@
 <div align="center">
-  <!-- <h1><b> TimeKD </b></h1> -->
-  <!-- <h2><b> TimeKD </b></h2> -->
   <h2><b> (ICDE'25) Efficient Multivariate Time Series Forecasting via Calibrated Language Models with Privileged Knowledge Distillation </b></h2>
 </div>
 
