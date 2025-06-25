@@ -56,4 +56,4 @@ We have conducted experiments on ETTm1, ETTm2, ETTh1, ETTh2, Weather, and Exchan
 We observe that the standard deviation of MSE and MAE is minimal ranging from 0.0014 to 0.0042. These results indicate that TimeKD exhibits strong robustness and stability across different random seeds.
 
 ## Contact Us
-For inquiries or further assistance, contact us at [chenxi.liu@ntu.edu.sg](mailto:chenxi.liu@ntu.edu.sg) or open an issue on this repository.
+For inquiries or further assistance, contact us at [chenxi.liu@ntu.edu.sg](mailto:chenxi.liu@ntu.edu.sg).
