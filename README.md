@@ -14,7 +14,7 @@ This repository contains the code for our ICDE 2025 [paper](https://www.arxiv.or
 @inproceedings{liu2025timekd,
   title={Efficient Multivariate Time Series Forecasting via Calibrated Language Models with Privileged Knowledge Distillation},
   author={Chenxi Liu and Hao Miao and Qianxiong Xu and Shaowen Zhou and Cheng Long and Yan Zhao and Ziyue Li and Rui Zhao},
-  booktitle    = {ICDE},
+  booktitle = {ICDE},
   year={2025}
 ```
 
