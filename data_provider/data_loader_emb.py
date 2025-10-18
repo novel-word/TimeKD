@@ -285,7 +285,9 @@ class Dataset_Custom(Dataset):
         self.data_path_file = data_path_file
 
         self.model_name = model_name
-        self.embed_path = f"{data_path_file}/{self.pred_len}/{flag}/"
+        # self.embed_path = f"{data_path_file}/{self.pred_len}/{flag}/"
+        self.embed_path = os.path.join(self.root_path, self.data_path_file, str(self.pred_len), self.flag)
+
 
         self.__read_data__()
 
