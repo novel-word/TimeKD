@@ -92,7 +92,7 @@ class MSK(nn.Module):
 
             if use_cache:
                 presents = presents + (outputs[1],)
-            if output_attentions:
+            if output_attentions and len(outputs) > 2:
                 all_self_attentions = all_self_attentions + (outputs[2],)
         
         hidden_states = self.gpt2.ln_f(hidden_states)
